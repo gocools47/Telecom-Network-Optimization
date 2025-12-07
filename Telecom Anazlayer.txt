@@ -1,0 +1,75 @@
+import java.io.*;
+import java.sql.*;
+import java.util.*;
+
+public class TelecomAnalyzer {
+
+    private static final String DB_URL = "jdbc:sqlite:telecom.db";
+
+    public static void main(String[] args) {
+        try {
+            Connection conn = DriverManager.getConnection(DB_URL);
+            System.out.println("✔ Connected to database.");
+
+            runSQLFile(conn, "../sql/create_tables.sql");
+            loadCSVData(conn, "../data/network_measurements.csv");
+
+            System.out.println("\n📊 Running Network Optimization Analysis...\n");
+            runSQLFileAndPrint(conn, "../sql/analysis_queries.sql");
+
+            conn.close();
+            System.out.println("\n✅ Analysis Completed!");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void runSQLFile(Connection conn, String filePath) throws Exception {
+        String sql = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(filePath)));
+        Statement stmt = conn.createStatement();
+        stmt.execute(sql);
+    }
+
+    private static void runSQLFileAndPrint(Connection conn, String filePath) throws Exception {
+        String sql = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(filePath)));
+        String[] queries = sql.split(";");
+
+        for (String q : queries) {
+            if (q.trim().isEmpty()) continue;
+
+            System.out.println("\n▶ Query: " + q.trim());
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(q);
+
+            ResultSetMetaData meta = rs.getMetaData();
+            int columnCount = meta.getColumnCount();
+
+            while (rs.next()) {
+                for (int i = 1; i <= columnCount; i++) {
+                    System.out.print(meta.getColumnName(i) + ": " + rs.getString(i) + "  ");
+                }
+                System.out.println();
+            }
+        }
+    }
+
+    private static void loadCSVData(Connection conn, String path) throws Exception {
+        BufferedReader br = new BufferedReader(new FileReader(path));
+        String line;
+        br.readLine(); // skip header
+
+        String insertSQL = "INSERT INTO network_measurements VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        PreparedStatement pstmt = conn.prepareStatement(insertSQL);
+
+        while ((line = br.readLine()) != null) {
+            String[] data = line.split(",");
+
+            for (int i = 0; i < data.length; i++) {
+                pstmt.setString(i + 1, data[i]);
+            }
+            pstmt.executeUpdate();
+        }
+        System.out.println("✔ CSV Data Imported Successfully.");
+    }
+}
